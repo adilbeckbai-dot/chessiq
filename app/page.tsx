@@ -350,14 +350,14 @@ ${movetext}
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-black p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
-        <header className="flex flex-wrap items-center justify-between mb-4 gap-3">
+        <header className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
               ♟ <span className="text-orange-500">Chess</span>IQ
             </h1>
             <span className="hidden md:inline text-zinc-500 text-xs">{t.subtitle}</span>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap w-full md:w-auto">
             <div className="flex bg-zinc-800 rounded-full p-1 border border-zinc-700">
               {(["kz", "ru", "en"] as Language[]).map((l) => (
                 <button key={l} onClick={() => setLang(l)} className={`text-xs font-bold px-2.5 py-1 rounded-full transition-all ${lang === l ? "bg-orange-600 text-white" : "text-zinc-400 hover:text-white"}`}>
@@ -380,6 +380,15 @@ ${movetext}
             ) : (
               <div className="bg-orange-500 text-white text-xs font-semibold px-3 py-2 rounded-full">{t.proMember}</div>
             )}
+            <button
+              onClick={() => {
+                const id = Math.random().toString(36).substring(2, 8).toUpperCase();
+                window.location.href = `/room/${id}`;
+              }}
+              className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white text-xs font-semibold px-3 py-2 rounded-full shadow-lg shadow-green-600/30"
+            >
+              {t.playFriend}
+            </button>
             <button onClick={() => setShowPuzzles(true)} className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white text-xs font-semibold px-3 py-2 rounded-full shadow-lg shadow-purple-600/30">{t.puzzles}</button>
             <button onClick={() => setShowLeaderboard(true)} className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold px-3 py-2 rounded-full">{t.leaderboard}</button>
             <button onClick={exportPGN} className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold px-3 py-2 rounded-full">{t.pgn}</button>
@@ -499,33 +508,33 @@ ${movetext}
               <div className="bg-zinc-800/50 backdrop-blur rounded-2xl p-5 border border-zinc-700 sticky top-4">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-xl">👥</span>
-                  <h2 className="text-white font-semibold">Local 2P</h2>
+                  <h2 className="text-white font-semibold">{t.local2pTitle}</h2>
                 </div>
                 <div className="space-y-2 mb-4">
                   <div className={`flex items-center justify-between p-3 rounded-lg transition-all ${game.turn() === "w" ? "bg-orange-600 shadow-lg shadow-orange-600/30" : "bg-zinc-700/50"}`}>
                     <div className="flex items-center gap-2">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${game.turn() === "w" ? "bg-white text-black" : "bg-zinc-600 text-zinc-400"}`}>1</div>
                       <div>
-                        <p className={`text-sm font-bold ${game.turn() === "w" ? "text-white" : "text-zinc-400"}`}>Player 1</p>
-                        <p className={`text-xs ${game.turn() === "w" ? "text-orange-100" : "text-zinc-500"}`}>♔ White</p>
-                      </div>
+                      <p className={`text-sm font-bold ${game.turn() === "w" ? "text-white" : "text-zinc-400"}`}>{t.player1}</p>
+                      <p className={`text-xs ${game.turn() === "w" ? "text-orange-100" : "text-zinc-500"}`}>{t.white}</p>
                     </div>
-                    {game.turn() === "w" && <span className="text-white text-xs font-bold">YOUR TURN</span>}
+                    </div>
+                   {game.turn() === "w" && <span className="text-white text-xs font-bold">{t.yourTurnBadge}</span>}
                   </div>
                   <div className={`flex items-center justify-between p-3 rounded-lg transition-all ${game.turn() === "b" ? "bg-orange-600 shadow-lg shadow-orange-600/30" : "bg-zinc-700/50"}`}>
                     <div className="flex items-center gap-2">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${game.turn() === "b" ? "bg-zinc-900 text-white border-2 border-white" : "bg-zinc-600 text-zinc-400"}`}>2</div>
-                      <div>
-                        <p className={`text-sm font-bold ${game.turn() === "b" ? "text-white" : "text-zinc-400"}`}>Player 2</p>
-                        <p className={`text-xs ${game.turn() === "b" ? "text-orange-100" : "text-zinc-500"}`}>♚ Black</p>
-                      </div>
+                     <div>
+                      <p className={`text-sm font-bold ${game.turn() === "b" ? "text-white" : "text-zinc-400"}`}>{t.player2}</p>
+                      <p className={`text-xs ${game.turn() === "b" ? "text-orange-100" : "text-zinc-500"}`}>{t.black}</p>
                     </div>
-                    {game.turn() === "b" && <span className="text-white text-xs font-bold">YOUR TURN</span>}
+                    </div>
+                   {game.turn() === "b" && <span className="text-white text-xs font-bold">{t.yourTurnBadge}</span>}
                   </div>
                 </div>
                 <div className="bg-zinc-900/50 rounded-lg p-3">
                   <p className="text-orange-400 text-sm font-semibold mb-1">{gameStatus}</p>
-                  <p className="text-xs text-zinc-500">👥 Кезекпен ойнаңыз — 1 ноутбук, 2 ойыншы!</p>
+                  <p className="text-xs text-zinc-500">{t.takeTurns}</p>
                 </div>
               </div>
             )}
