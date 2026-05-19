@@ -32,6 +32,16 @@ export default function Home() {
   const [position, setPosition] = useState(game.fen());
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [gameMode, setGameMode] = useState<GameMode>("ai");
+  const [uiTheme, setUiTheme] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("chessiq_ui_theme") as "dark" | "light";
+    if (saved) setUiTheme(saved);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("chessiq_ui_theme", uiTheme);
+  }, [uiTheme]);
   const [isThinking, setIsThinking] = useState(false);
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [currentAnalysis, setCurrentAnalysis] = useState<string>("");
@@ -348,11 +358,15 @@ ${movetext}
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-black p-4 md:p-6">
+   <div className={`min-h-screen p-4 md:p-6 transition-colors ${
+      uiTheme === "dark"
+        ? "bg-gradient-to-br from-zinc-900 via-zinc-800 to-black"
+        : "bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100"
+    }`}>
       <div className="max-w-6xl mx-auto">
        <header className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
+            <h1 className={`text-3xl md:text-4xl font-bold tracking-tight ${uiTheme === "dark" ? "text-white" : "text-zinc-900"}`}>
               ♟ <span className="text-orange-500">Chess</span>IQ
             </h1>
             <span className="hidden md:inline text-zinc-500 text-xs">{t.subtitle}</span>
@@ -393,6 +407,13 @@ ${movetext}
             <button onClick={() => setShowLeaderboard(true)} className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold px-3 py-2 rounded-full">{t.leaderboard}</button>
             <button onClick={exportPGN} className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold px-3 py-2 rounded-full">{t.pgn}</button>
             <button onClick={startReplay} className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold px-3 py-2 rounded-full">{t.replay}</button>
+            <button
+              onClick={() => setUiTheme(uiTheme === "dark" ? "light" : "dark")}
+              className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold px-3 py-2 rounded-full"
+              title={uiTheme === "dark" ? "Light mode" : "Dark mode"}
+            >
+              {uiTheme === "dark" ? "☀️" : "🌙"}
+            </button>
             <button onClick={() => setShowThemeModal(true)} className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold px-3 py-2 rounded-full">{currentTheme.emoji} {t.theme}</button>
             <button onClick={() => setShowSettings(!showSettings)} className={`text-xs font-semibold px-3 py-2 rounded-full ${showSettings ? "bg-orange-600 text-white" : "bg-zinc-700 hover:bg-zinc-600 text-white"}`}>
               ⚙️ {showSettings ? t.closeSettings : t.settings}
