@@ -458,29 +458,7 @@ ${movetext}
             <button onClick={() => setShowSettings(!showSettings)} className={`text-xs font-semibold px-3 py-2 rounded-full ${showSettings ? "bg-orange-600 text-white" : "bg-zinc-700 hover:bg-zinc-600 text-white"}`}>
               ⚙️ {showSettings ? t.closeSettings : t.settings}
             </button>
-            {user ? (
-              <div className="flex items-center gap-2 bg-zinc-800 rounded-full pl-1 pr-3 py-1 border border-zinc-700">
-                {user.avatar && (
-                  <img src={user.avatar} alt="" className="w-6 h-6 rounded-full" />
-                )}
-                <span className="text-xs text-white font-medium max-w-[80px] truncate">{user.name}</span>
-                <button
-                  onClick={signOut}
-                  className="text-xs text-red-400 hover:text-red-300"
-                  title="Sign out"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={signInWithGoogle}
-                className="bg-white hover:bg-zinc-100 text-zinc-900 text-xs font-bold px-3 py-2 rounded-full flex items-center gap-2"
-              >
-                <span>🔐</span>
-                <span>{lang === "kz" ? "Google-мен кіру" : lang === "ru" ? "Войти с Google" : "Sign in with Google"}</span>
-              </button>
-            )}
+           
           </div>
         </header>
 
@@ -516,6 +494,38 @@ ${movetext}
               <h3 className="text-white font-semibold mb-2 text-sm">{t.status}</h3>
               <p className="text-orange-400 font-semibold text-sm">{gameStatus}</p>
               <button onClick={resetGame} className="mt-2 w-full bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold py-2 px-3 rounded-lg">{t.newGame}</button>
+            </div>
+            <div className="md:col-span-3 pt-3 border-t border-zinc-700">
+              <h3 className="text-white font-semibold mb-2 text-sm">
+                🔐 {lang === "kz" ? "Аккаунт" : lang === "ru" ? "Аккаунт" : "Account"}
+              </h3>
+              {user ? (
+                <div className="flex items-center justify-between bg-zinc-900/50 rounded-lg p-3">
+                  <div className="flex items-center gap-3">
+                    {user.avatar && (
+                      <img src={user.avatar} alt="" className="w-10 h-10 rounded-full" />
+                    )}
+                    <div>
+                      <p className="text-white font-semibold text-sm">{user.name}</p>
+                      <p className="text-zinc-500 text-xs">{user.email}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={signOut}
+                    className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-2 rounded-lg"
+                  >
+                    {lang === "kz" ? "Шығу" : lang === "ru" ? "Выйти" : "Sign Out"}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={signInWithGoogle}
+                  className="w-full bg-white hover:bg-zinc-100 text-zinc-900 font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2"
+                >
+                  <span>🔐</span>
+                  <span>{lang === "kz" ? "Google-мен кіру" : lang === "ru" ? "Войти с Google" : "Sign in with Google"}</span>
+                </button>
+              )}
             </div>
           </div>
         )}
