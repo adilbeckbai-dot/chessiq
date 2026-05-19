@@ -5,6 +5,7 @@ import { Chess } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import Leaderboard from "./components/Leaderboard";
 import Puzzles from "./components/Puzzles";
+import { supabase } from "./lib/supabase";
 import { translations, type Language } from "./i18n/translations";
 
 type Difficulty = "easy" | "medium" | "hard";
@@ -33,6 +34,45 @@ export default function Home() {
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [gameMode, setGameMode] = useState<GameMode>("ai");
   const [uiTheme, setUiTheme] = useState<"dark" | "light">("dark");
+  const [user, setUser] = useState<{ email: string; name: string; avatar: string } | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          email: session.user.email || "",
+          name: session.user.user_metadata.full_name || session.user.email || "",
+          avatar: session.user.user_metadata.avatar_url || "",
+        });
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          email: session.user.email || "",
+          name: session.user.user_metadata.full_name || session.user.email || "",
+          avatar: session.user.user_metadata.avatar_url || "",
+        });
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  async function signInWithGoogle() {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    setUser(null);
+  }
 
   useEffect(() => {
     const saved = localStorage.getItem("chessiq_ui_theme") as "dark" | "light";
@@ -418,6 +458,29 @@ ${movetext}
             <button onClick={() => setShowSettings(!showSettings)} className={`text-xs font-semibold px-3 py-2 rounded-full ${showSettings ? "bg-orange-600 text-white" : "bg-zinc-700 hover:bg-zinc-600 text-white"}`}>
               ⚙️ {showSettings ? t.closeSettings : t.settings}
             </button>
+            {user ? (
+              <div className="flex items-center gap-2 bg-zinc-800 rounded-full pl-1 pr-3 py-1 border border-zinc-700">
+                {user.avatar && (
+                  <img src={user.avatar} alt="" className="w-6 h-6 rounded-full" />
+                )}
+                <span className="text-xs text-white font-medium max-w-[80px] truncate">{user.name}</span>
+                <button
+                  onClick={signOut}
+                  className="text-xs text-red-400 hover:text-red-300"
+                  title="Sign out"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={signInWithGoogle}
+                className="bg-white hover:bg-zinc-100 text-zinc-900 text-xs font-bold px-3 py-2 rounded-full flex items-center gap-2"
+              >
+                <span>🔐</span>
+                <span>{lang === "kz" ? "Google-мен кіру" : lang === "ru" ? "Войти с Google" : "Sign in with Google"}</span>
+              </button>
+            )}
           </div>
         </header>
 
