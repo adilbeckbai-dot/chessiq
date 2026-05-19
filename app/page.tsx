@@ -8,6 +8,7 @@ import Puzzles from "./components/Puzzles";
 import { translations, type Language } from "./i18n/translations";
 
 type Difficulty = "easy" | "medium" | "hard";
+type GameMode = "ai" | "local";
 
 type Theme = {
   id: string;
@@ -30,6 +31,7 @@ export default function Home() {
   const [game, setGame] = useState(new Chess());
   const [position, setPosition] = useState(game.fen());
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
+  const [gameMode, setGameMode] = useState<GameMode>("ai");
   const [isThinking, setIsThinking] = useState(false);
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [currentAnalysis, setCurrentAnalysis] = useState<string>("");
@@ -66,16 +68,13 @@ export default function Home() {
   const isProRef = useRef(isPro);
   const aiUsesLeftRef = useRef(aiUsesLeft);
   const langRef = useRef(lang);
+  const gameModeRef = useRef(gameMode);
 
-  // Load saved language
   useEffect(() => {
     const saved = localStorage.getItem("chessiq_lang") as Language;
-    if (saved && ["kz", "ru", "en"].includes(saved)) {
-      setLang(saved);
-    }
+    if (saved && ["kz", "ru", "en"].includes(saved)) setLang(saved);
   }, []);
 
-  // Save language
   useEffect(() => {
     localStorage.setItem("chessiq_lang", lang);
     langRef.current = lang;
@@ -86,8 +85,8 @@ export default function Home() {
   useEffect(() => { moveHistoryRef.current = moveHistory; }, [moveHistory]);
   useEffect(() => { isProRef.current = isPro; }, [isPro]);
   useEffect(() => { aiUsesLeftRef.current = aiUsesLeft; }, [aiUsesLeft]);
+  useEffect(() => { gameModeRef.current = gameMode; }, [gameMode]);
 
-  // Sounds
   useEffect(() => {
     if (typeof window === "undefined") return;
     moveSoundRef.current = new Audio("/sounds/Move.mp3");
@@ -100,17 +99,13 @@ export default function Home() {
   }, []);
 
   function playSound(type: "move" | "capture" | "check" | "victory") {
-    const ref =
-      type === "move" ? moveSoundRef :
-      type === "capture" ? captureSoundRef :
-      type === "check" ? checkSoundRef : victorySoundRef;
+    const ref = type === "move" ? moveSoundRef : type === "capture" ? captureSoundRef : type === "check" ? checkSoundRef : victorySoundRef;
     if (ref.current) {
       ref.current.currentTime = 0;
       ref.current.play().catch(() => {});
     }
   }
 
-  // Play engine
   useEffect(() => {
     if (typeof window === "undefined") return;
     const playSf = new Worker("/stockfish.js");
@@ -129,8 +124,7 @@ export default function Home() {
             if (result) {
               setPosition(currentGame.fen());
               setMoveHistory((prev) => [...prev, result.san]);
-              if (result.captured) playSound("capture");
-              else playSound("move");
+              if (result.captured) playSound("capture"); else playSound("move");
               updateStatus(currentGame);
             }
           } catch {}
@@ -143,7 +137,6 @@ export default function Home() {
     return () => playSf.terminate();
   }, []);
 
-  // Analysis engine
   useEffect(() => {
     if (typeof window === "undefined") return;
     const analysisSf = new Worker("/stockfish.js");
@@ -172,11 +165,16 @@ export default function Home() {
       playSound("check");
       setGameStatus(tNow.checkTurn);
     } else {
-      setGameStatus(g.turn() === "w" ? tNow.yourTurn : tNow.aiThinking);
+      if (gameModeRef.current === "local") {
+        setGameStatus(g.turn() === "w" ? tNow.whiteTurn : tNow.blackTurn);
+      } else {
+        setGameStatus(g.turn() === "w" ? tNow.yourTurn : tNow.aiThinking);
+      }
     }
   }
 
   async function analyzeMove(bestMove: string) {
+    if (gameModeRef.current === "local") return;
     const tNow = translations[langRef.current];
     if (!isProRef.current) {
       if (aiUsesLeftRef.current <= 0) {
@@ -232,20 +230,29 @@ export default function Home() {
   }
 
   function onDrop(sourceSquare: string, targetSquare: string) {
-    if (game.turn() !== "w" || isThinking) return false;
+    if (gameMode === "ai" && (game.turn() !== "w" || isThinking)) return false;
     try {
-      const fenBeforeMove = game.fen();
-      const move = game.move({ from: sourceSquare, to: targetSquare, promotion: "q" });
+      const newGame = new Chess(game.fen());
+      const fenBeforeMove = newGame.fen();
+      const move = newGame.move({ from: sourceSquare, to: targetSquare, promotion: "q" });
       if (move === null) return false;
-      const newFen = game.fen();
+      const newFen = newGame.fen();
+      setGame(newGame);
       setPosition(newFen);
       setMoveHistory((prev) => [...prev, move.san]);
       lastPlayerMoveRef.current = move.san;
       if (move.captured) playSound("capture"); else playSound("move");
-      if (game.isCheckmate()) { setGameStatus(t.youWin); return true; }
-      if (game.isDraw()) { setGameStatus(t.draw); return true; }
-      setTimeout(() => requestAnalysis(fenBeforeMove), 100);
-      setTimeout(() => requestAIMove(newFen), 1500);
+      if (newGame.isCheckmate()) {
+        setGameStatus(gameMode === "local" ? (newGame.turn() === "w" ? "🎉 Player 2 Wins!" : "🎉 Player 1 Wins!") : t.youWin);
+        return true;
+      }
+      if (newGame.isDraw()) { setGameStatus(t.draw); return true; }
+      if (gameMode === "ai") {
+        setTimeout(() => requestAnalysis(fenBeforeMove), 100);
+        setTimeout(() => requestAIMove(newFen), 1500);
+      } else {
+        setGameStatus(newGame.turn() === "w" ? t.whiteTurn : t.blackTurn);
+      }
       return true;
     } catch { return false; }
   }
@@ -268,10 +275,9 @@ export default function Home() {
 [Site "chessiq-kappa.vercel.app"]
 [Date "${date}"]
 [White "Player"]
-[Black "Stockfish AI (${difficulty})"]
+[Black "${gameMode === "ai" ? `Stockfish AI (${difficulty})` : "Player 2"}"]
 [Result "${result}"]
 [Accuracy "${accuracy}%"]
-[Engine "Stockfish + AI Coach (Llama 3.3)"]
 
 ${movetext}
 `;
@@ -323,7 +329,7 @@ ${movetext}
     setGame(newGame);
     setPosition(newGame.fen());
     setMoveHistory([]);
-    setGameStatus(t.yourTurn);
+    setGameStatus(gameMode === "local" ? t.whiteTurn : t.yourTurn);
     setIsThinking(false);
     setCurrentAnalysis("");
     setAccuracy(100);
@@ -352,25 +358,25 @@ ${movetext}
             <span className="hidden md:inline text-zinc-500 text-xs">{t.subtitle}</span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {/* LANGUAGE SWITCHER */}
             <div className="flex bg-zinc-800 rounded-full p-1 border border-zinc-700">
               {(["kz", "ru", "en"] as Language[]).map((l) => (
-                <button
-                  key={l}
-                  onClick={() => setLang(l)}
-                  className={`text-xs font-bold px-2.5 py-1 rounded-full transition-all ${
-                    lang === l ? "bg-orange-600 text-white" : "text-zinc-400 hover:text-white"
-                  }`}
-                >
+                <button key={l} onClick={() => setLang(l)} className={`text-xs font-bold px-2.5 py-1 rounded-full transition-all ${lang === l ? "bg-orange-600 text-white" : "text-zinc-400 hover:text-white"}`}>
                   {l === "kz" ? "🇰🇿 KZ" : l === "ru" ? "🇷🇺 RU" : "🇬🇧 EN"}
                 </button>
               ))}
             </div>
 
-            {!isPro ? (
-              <button onClick={() => setShowProModal(true)} className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-xs font-semibold px-3 py-2 rounded-full shadow-lg shadow-orange-600/30">
-                {t.upgrade}
+            <div className="flex bg-zinc-800 rounded-full p-1 border border-zinc-700">
+              <button onClick={() => { setGameMode("ai"); resetGame(); }} className={`text-xs font-bold px-2.5 py-1 rounded-full transition-all ${gameMode === "ai" ? "bg-orange-600 text-white" : "text-zinc-400 hover:text-white"}`}>
+                {t.aiMode}
               </button>
+              <button onClick={() => { setGameMode("local"); resetGame(); }} className={`text-xs font-bold px-2.5 py-1 rounded-full transition-all ${gameMode === "local" ? "bg-orange-600 text-white" : "text-zinc-400 hover:text-white"}`}>
+                {t.twoPMode}
+              </button>
+            </div>
+
+            {!isPro ? (
+              <button onClick={() => setShowProModal(true)} className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-xs font-semibold px-3 py-2 rounded-full shadow-lg shadow-orange-600/30">{t.upgrade}</button>
             ) : (
               <div className="bg-orange-500 text-white text-xs font-semibold px-3 py-2 rounded-full">{t.proMember}</div>
             )}
@@ -379,7 +385,7 @@ ${movetext}
             <button onClick={exportPGN} className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold px-3 py-2 rounded-full">{t.pgn}</button>
             <button onClick={startReplay} className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold px-3 py-2 rounded-full">{t.replay}</button>
             <button onClick={() => setShowThemeModal(true)} className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold px-3 py-2 rounded-full">{currentTheme.emoji} {t.theme}</button>
-            <button onClick={() => setShowSettings(!showSettings)} className={`text-xs font-semibold px-3 py-2 rounded-full transition-colors ${showSettings ? "bg-orange-600 text-white" : "bg-zinc-700 hover:bg-zinc-600 text-white"}`}>
+            <button onClick={() => setShowSettings(!showSettings)} className={`text-xs font-semibold px-3 py-2 rounded-full ${showSettings ? "bg-orange-600 text-white" : "bg-zinc-700 hover:bg-zinc-600 text-white"}`}>
               ⚙️ {showSettings ? t.closeSettings : t.settings}
             </button>
           </div>
@@ -391,7 +397,7 @@ ${movetext}
               <h3 className="text-white font-semibold mb-2 text-sm">{t.difficulty}</h3>
               <div className="flex gap-2">
                 {(["easy", "medium", "hard"] as Difficulty[]).map((level) => (
-                  <button key={level} onClick={() => setDifficulty(level)} className={`flex-1 py-2 px-2 text-xs rounded-lg font-medium transition-all ${difficulty === level ? "bg-orange-600 text-white" : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"}`}>
+                  <button key={level} onClick={() => setDifficulty(level)} className={`flex-1 py-2 px-2 text-xs rounded-lg font-medium ${difficulty === level ? "bg-orange-600 text-white" : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"}`}>
                     {level === "easy" ? "🟢" : level === "medium" ? "🟡" : "🔴"} {level === "easy" ? t.easy : level === "medium" ? t.medium : t.hard}
                   </button>
                 ))}
@@ -405,7 +411,7 @@ ${movetext}
                   <span className="text-orange-400 font-bold">{accuracy}%</span>
                 </div>
                 <div className="w-full bg-zinc-700 rounded-full h-1.5">
-                  <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-1.5 rounded-full transition-all" style={{ width: `${accuracy}%` }} />
+                  <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-1.5 rounded-full" style={{ width: `${accuracy}%` }} />
                 </div>
                 <div className="flex justify-between text-xs text-zinc-400 mt-1">
                   <span>{t.goodMoves}: {moveCount.good}/{moveCount.total}</span>
@@ -461,40 +467,71 @@ ${movetext}
           </div>
 
           <div className="lg:col-span-1">
-            <div className="bg-gradient-to-br from-orange-900/30 to-zinc-800/50 backdrop-blur rounded-2xl p-5 border border-orange-700/30 sticky top-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">🧠</span>
-                  <h2 className="text-white font-semibold">{t.aiCoach}</h2>
+            {gameMode === "ai" ? (
+              <div className="bg-gradient-to-br from-orange-900/30 to-zinc-800/50 backdrop-blur rounded-2xl p-5 border border-orange-700/30 sticky top-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🧠</span>
+                    <h2 className="text-white font-semibold">{t.aiCoach}</h2>
+                  </div>
+                  {isPro ? (
+                    <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">PRO ⭐</span>
+                  ) : (
+                    <span className="text-xs text-zinc-500">{Math.max(0, aiUsesLeft)}{t.freeUses}</span>
+                  )}
                 </div>
-                {isPro ? (
-                  <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">PRO ⭐</span>
-                ) : (
-                  <span className="text-xs text-zinc-500">{Math.max(0, aiUsesLeft)}{t.freeUses}</span>
+                {isAnalyzing && (
+                  <div className="flex items-center gap-2 text-orange-400 mb-3">
+                    <div className="animate-spin h-4 w-4 border-2 border-orange-400 border-t-transparent rounded-full"></div>
+                    <span className="text-sm">{t.analyzing}</span>
+                  </div>
                 )}
-              </div>
-
-              {isAnalyzing && (
-                <div className="flex items-center gap-2 text-orange-400 mb-3">
-                  <div className="animate-spin h-4 w-4 border-2 border-orange-400 border-t-transparent rounded-full"></div>
-                  <span className="text-sm">{t.analyzing}</span>
+                {currentAnalysis ? (
+                  <div className="text-zinc-200 text-sm leading-relaxed whitespace-pre-wrap">{currentAnalysis}</div>
+                ) : (
+                  <p className="text-zinc-500 text-sm italic">{t.makeMove}</p>
+                )}
+                <div className="mt-4 pt-3 border-t border-zinc-700/50">
+                  <p className="text-xs text-zinc-500">{t.proTip}</p>
                 </div>
-              )}
-
-              {currentAnalysis ? (
-                <div className="text-zinc-200 text-sm leading-relaxed whitespace-pre-wrap">{currentAnalysis}</div>
-              ) : (
-                <p className="text-zinc-500 text-sm italic">{t.makeMove}</p>
-              )}
-
-              <div className="mt-4 pt-3 border-t border-zinc-700/50">
-                <p className="text-xs text-zinc-500">{t.proTip}</p>
               </div>
-            </div>
+            ) : (
+              <div className="bg-zinc-800/50 backdrop-blur rounded-2xl p-5 border border-zinc-700 sticky top-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xl">👥</span>
+                  <h2 className="text-white font-semibold">Local 2P</h2>
+                </div>
+                <div className="space-y-2 mb-4">
+                  <div className={`flex items-center justify-between p-3 rounded-lg transition-all ${game.turn() === "w" ? "bg-orange-600 shadow-lg shadow-orange-600/30" : "bg-zinc-700/50"}`}>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${game.turn() === "w" ? "bg-white text-black" : "bg-zinc-600 text-zinc-400"}`}>1</div>
+                      <div>
+                        <p className={`text-sm font-bold ${game.turn() === "w" ? "text-white" : "text-zinc-400"}`}>Player 1</p>
+                        <p className={`text-xs ${game.turn() === "w" ? "text-orange-100" : "text-zinc-500"}`}>♔ White</p>
+                      </div>
+                    </div>
+                    {game.turn() === "w" && <span className="text-white text-xs font-bold">YOUR TURN</span>}
+                  </div>
+                  <div className={`flex items-center justify-between p-3 rounded-lg transition-all ${game.turn() === "b" ? "bg-orange-600 shadow-lg shadow-orange-600/30" : "bg-zinc-700/50"}`}>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${game.turn() === "b" ? "bg-zinc-900 text-white border-2 border-white" : "bg-zinc-600 text-zinc-400"}`}>2</div>
+                      <div>
+                        <p className={`text-sm font-bold ${game.turn() === "b" ? "text-white" : "text-zinc-400"}`}>Player 2</p>
+                        <p className={`text-xs ${game.turn() === "b" ? "text-orange-100" : "text-zinc-500"}`}>♚ Black</p>
+                      </div>
+                    </div>
+                    {game.turn() === "b" && <span className="text-white text-xs font-bold">YOUR TURN</span>}
+                  </div>
+                </div>
+                <div className="bg-zinc-900/50 rounded-lg p-3">
+                  <p className="text-orange-400 text-sm font-semibold mb-1">{gameStatus}</p>
+                  <p className="text-xs text-zinc-500">👥 Кезекпен ойнаңыз — 1 ноутбук, 2 ойыншы!</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* THEME MODAL */}
         {showThemeModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowThemeModal(false)}>
             <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 rounded-2xl p-6 max-w-md w-full border-2 border-zinc-700" onClick={(e) => e.stopPropagation()}>
@@ -522,15 +559,12 @@ ${movetext}
           </div>
         )}
 
-        {/* PRO MODAL */}
         {showProModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowProModal(false)}>
             <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 rounded-2xl p-8 max-w-md w-full border-2 border-orange-500" onClick={(e) => e.stopPropagation()}>
               <div className="text-center mb-6">
                 <div className="text-5xl mb-2">⭐</div>
-                <h2 className="text-3xl font-bold text-white mb-2">
-                  {t.proTitle} <span className="text-orange-500">Pro</span>
-                </h2>
+                <h2 className="text-3xl font-bold text-white mb-2">{t.proTitle} <span className="text-orange-500">Pro</span></h2>
                 <p className="text-zinc-400">{t.proSubtitle}</p>
               </div>
               <div className="space-y-3 mb-6">
