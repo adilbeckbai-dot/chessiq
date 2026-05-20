@@ -35,7 +35,23 @@ export default function Home() {
   const [gameMode, setGameMode] = useState<GameMode>("ai");
   const [uiTheme, setUiTheme] = useState<"dark" | "light">("dark");
   const [user, setUser] = useState<{ email: string; name: string; avatar: string } | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [gameHistory, setGameHistory] = useState<any[]>([]);
 
+  async function loadGameHistory() {
+    if (!user) return;
+    try {
+      const { data } = await supabase
+        .from("games")
+        .select("*")
+        .eq("user_email", user.email)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      setGameHistory(data || []);
+    } catch (e) {
+      console.error("Failed to load history:", e);
+    }
+  }
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
@@ -203,13 +219,16 @@ export default function Home() {
     return () => analysisSf.terminate();
   }, []);
 
-  function updateStatus(g: Chess) {
+ function updateStatus(g: Chess) {
     const tNow = translations[langRef.current];
     if (g.isCheckmate()) {
       if (g.turn() === "b") setTotalWins((prev) => prev + 1);
       playSound("victory");
+      const result = g.turn() === "w" ? "loss" : "win";
+      saveGameToHistory(result);
       setGameStatus(g.turn() === "w" ? tNow.aiWins : tNow.youWin);
     } else if (g.isDraw()) {
+      saveGameToHistory("draw");
       setGameStatus(tNow.draw);
     } else if (g.isCheck()) {
       playSound("check");
@@ -279,7 +298,7 @@ export default function Home() {
     analysisEngineRef.current.postMessage("go depth 12");
   }
 
-  function onDrop(sourceSquare: string, targetSquare: string) {
+function onDrop(sourceSquare: string, targetSquare: string) {
     if (gameMode === "ai" && (game.turn() !== "w" || isThinking)) return false;
     try {
       const newGame = new Chess(game.fen());
@@ -292,11 +311,19 @@ export default function Home() {
       setMoveHistory((prev) => [...prev, move.san]);
       lastPlayerMoveRef.current = move.san;
       if (move.captured) playSound("capture"); else playSound("move");
+
       if (newGame.isCheckmate()) {
+        playSound("victory");
+        saveGameToHistory("win");
         setGameStatus(gameMode === "local" ? (newGame.turn() === "w" ? "🎉 Player 2 Wins!" : "🎉 Player 1 Wins!") : t.youWin);
         return true;
       }
-      if (newGame.isDraw()) { setGameStatus(t.draw); return true; }
+      if (newGame.isDraw()) {
+        saveGameToHistory("draw");
+        setGameStatus(t.draw);
+        return true;
+      }
+
       if (gameMode === "ai") {
         setTimeout(() => requestAnalysis(fenBeforeMove), 100);
         setTimeout(() => requestAIMove(newFen), 1500);
@@ -373,7 +400,33 @@ ${movetext}
     setShowReplay(false);
     setPosition(gameRef.current.fen());
   }
-
+   async function saveGameToHistory(result: string) {
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log("saveGameToHistory called", { session, result });
+    if (!session?.user) {
+      console.log("No user session — skipping save");
+      return;
+    }
+    try {
+      const { error } = await supabase.from("games").insert({
+        user_email: session.user.email,
+        opponent: gameMode === "ai" ? `Stockfish AI (${difficulty})` : "Player 2",
+        difficulty: gameMode === "ai" ? difficulty : null,
+        result: result,
+        moves: moveHistory,
+        accuracy: accuracy,
+        total_moves: moveHistory.length,
+        pgn: gameRef.current.pgn(),
+      });
+      if (error) {
+        console.error("Supabase error:", error);
+      } else {
+        console.log("Game saved successfully!");
+      }
+    } catch (e) {
+      console.error("Failed to save game:", e);
+    }
+  }
   function resetGame() {
     const newGame = new Chess();
     setGame(newGame);
@@ -510,6 +563,12 @@ ${movetext}
                       <p className="text-zinc-500 text-xs">{user.email}</p>
                     </div>
                   </div>
+                  <button
+                    onClick={() => { loadGameHistory(); setShowHistory(true); }}
+                    className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold px-3 py-2 rounded-lg mr-2"
+                  >
+                    📜 {lang === "kz" ? "Тарих" : lang === "ru" ? "История" : "History"}
+                  </button>
                   <button
                     onClick={signOut}
                     className="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-2 rounded-lg"
@@ -688,6 +747,53 @@ ${movetext}
           </div>
         )}
 
+        {showHistory && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowHistory(false)}>
+            <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 rounded-2xl p-6 max-w-2xl w-full border-2 border-orange-500 shadow-2xl max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-white">
+                  📜 {lang === "kz" ? "Ойын тарихы" : lang === "ru" ? "История игр" : "Game History"}
+                </h2>
+                <button onClick={() => setShowHistory(false)} className="text-zinc-400 hover:text-white text-2xl">×</button>
+              </div>
+              {gameHistory.length === 0 ? (
+                <p className="text-zinc-500 text-center py-8">
+                  {lang === "kz" ? "Әлі ойындар жоқ. Ойнап көр!" : lang === "ru" ? "Игр пока нет. Сыграй!" : "No games yet. Play one!"}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {gameHistory.map((game) => (
+                    <div key={game.id} className="bg-zinc-800/50 rounded-lg p-3 flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-lg ${game.result === "win" ? "text-green-400" : game.result === "loss" ? "text-red-400" : "text-yellow-400"}`}>
+                            {game.result === "win" ? "🏆" : game.result === "loss" ? "❌" : "🤝"}
+                          </span>
+                          <span className="text-white font-semibold text-sm">{game.opponent}</span>
+                        </div>
+                        <div className="text-xs text-zinc-500">
+                          {new Date(game.created_at).toLocaleString()} · {game.total_moves} {lang === "kz" ? "жүріс" : lang === "ru" ? "ходов" : "moves"} · {game.accuracy}%
+                        </div>
+                      </div>
+                      <div className={`text-xs font-bold px-3 py-1 rounded-full ${
+                        game.result === "win" ? "bg-green-900/50 text-green-400" :
+                        game.result === "loss" ? "bg-red-900/50 text-red-400" :
+                        "bg-yellow-900/50 text-yellow-400"
+                      }`}>
+                        {game.result === "win" ? (lang === "kz" ? "Жеңіс" : lang === "ru" ? "Победа" : "Win") :
+                         game.result === "loss" ? (lang === "kz" ? "Жеңіліс" : lang === "ru" ? "Поражение" : "Loss") :
+                         (lang === "kz" ? "Тең" : lang === "ru" ? "Ничья" : "Draw")}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-zinc-500 mt-4 text-center">
+                {lang === "kz" ? "Соңғы 20 ойын" : lang === "ru" ? "Последние 20 игр" : "Last 20 games"}
+              </p>
+            </div>
+          </div>
+        )}
         {showLeaderboard && <Leaderboard myAccuracy={accuracy} myWins={totalWins} onClose={() => setShowLeaderboard(false)} />}
         {showPuzzles && <Puzzles onClose={() => setShowPuzzles(false)} />}
 

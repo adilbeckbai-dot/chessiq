@@ -13,3 +13,16 @@ export type Room = {
   black_player: string | null;
   status: "waiting" | "playing" | "finished";
 };
+export type Game = {
+  id: string;
+  user_id: string | null;
+  user_email: string | null;
+  opponent: string;
+  difficulty: string | null;
+  result: string;
+  moves: string[];
+  accuracy: number;
+  total_moves: number;
+  pgn: string | null;
+  created_at: string;
+};
